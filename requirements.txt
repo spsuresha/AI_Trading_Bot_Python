@@ -23,6 +23,9 @@ plotly>=5.18.0
 # ── Scheduling ───────────────────────────────────────────────
 schedule>=1.2.0
 
+# ── GA optimisation (stdlib only – no extra packages needed) ─
+# multiprocessing, random, math  →  Python standard library
+
 # ── Environment / config ─────────────────────────────────────
 python-dotenv>=1.0.0
 

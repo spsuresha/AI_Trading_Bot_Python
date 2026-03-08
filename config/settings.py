@@ -154,6 +154,61 @@ class Settings:
     log_dir: Path = LOG_DIR
     db_path: Path = DB_PATH
 
+    # ------------------------------------------------------------------ #
+    #  GA optimisation helpers                                             #
+    # ------------------------------------------------------------------ #
+
+    def apply_params(self, params: dict) -> None:
+        """
+        Apply a decoded params dict (from GA optimisation) to this Settings
+        instance in-place.  Only keys present in `params` are updated so
+        it is safe to pass a partial dict.
+        """
+        # Feature engineering
+        if "rsi_period"       in params: self.features.rsi_period       = int(params["rsi_period"])
+        if "macd_fast"        in params: self.features.macd_fast        = int(params["macd_fast"])
+        if "macd_slow"        in params: self.features.macd_slow        = int(params["macd_slow"])
+        if "macd_signal"      in params: self.features.macd_signal      = int(params["macd_signal"])
+        if "atr_period"       in params: self.features.atr_period       = int(params["atr_period"])
+        if "bb_period"        in params: self.features.bb_period        = int(params["bb_period"])
+        if "bb_std"           in params: self.features.bb_std           = float(params["bb_std"])
+        if "volume_ma_period" in params: self.features.volume_ma_period = int(params["volume_ma_period"])
+        # Strategy
+        if "momentum_lookback" in params:
+            self.strategy.momentum_lookback = int(params["momentum_lookback"])
+        if "zscore_threshold"  in params:
+            self.strategy.mean_rev_zscore_threshold = float(params["zscore_threshold"])
+        if "breakout_lookback" in params:
+            self.strategy.breakout_lookback = int(params["breakout_lookback"])
+        if "signal_threshold"  in params:
+            self.strategy.signal_threshold  = float(params["signal_threshold"])
+        if "weights"           in params:
+            self.strategy.weights = dict(params["weights"])
+        # Risk management
+        if "stop_loss_atr_mult"   in params:
+            self.risk.stop_loss_atr_mult   = float(params["stop_loss_atr_mult"])
+        if "take_profit_atr_mult" in params:
+            self.risk.take_profit_atr_mult = float(params["take_profit_atr_mult"])
+        if "risk_per_trade_pct"   in params:
+            self.risk.risk_per_trade_pct   = float(params["risk_per_trade_pct"])
+
+    def load_optimized(self) -> bool:
+        """
+        Load previously saved optimised parameters from
+        ``saved_models/optimized_params.json`` and apply them in-place.
+        Returns True if the file was found and applied, False otherwise.
+        """
+        import json
+        path = self.model_dir / "optimized_params.json"
+        if not path.exists():
+            return False
+        data = json.loads(path.read_text())
+        params = data.get("params", {})
+        if not params:
+            return False
+        self.apply_params(params)
+        return True
+
 
 # Singleton – import `settings` everywhere
 settings = Settings()
