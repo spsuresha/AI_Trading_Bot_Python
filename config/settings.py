@@ -116,6 +116,29 @@ class StrategyConfig:
     breakout_lookback: int = 20
 
 
+# ─────────────────────── reinforcement learning ──────────────
+@dataclass
+class RLConfig:
+    # Training
+    total_timesteps: int   = 500_000
+    episode_length:  int   = 252      # bars per episode
+    # PPO hyper-parameters
+    lr:              float = 3e-4
+    n_steps:         int   = 2048
+    batch_size:      int   = 64
+    n_epochs:        int   = 10
+    hidden_dim:      int   = 256
+    gamma:           float = 0.99
+    gae_lambda:      float = 0.95
+    clip_range:      float = 0.20
+    ent_coef:        float = 0.01
+    vf_coef:         float = 0.50
+    target_kl:       float = 0.015
+    # Strategy integration
+    weight:          float = 0.20    # weight in StrategyEngine when RL is enabled
+    enabled:         bool  = True    # set False to skip RL in strategy engine
+
+
 # ─────────────────────── backtesting ─────────────────────────
 @dataclass
 class BacktestConfig:
@@ -144,6 +167,7 @@ class Settings:
     features: FeatureConfig = field(default_factory=FeatureConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     strategy: StrategyConfig = field(default_factory=StrategyConfig)
+    rl: RLConfig = field(default_factory=RLConfig)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
     logging: LogConfig = field(default_factory=LogConfig)
 

@@ -26,6 +26,10 @@ schedule>=1.2.0
 # ── GA optimisation (stdlib only – no extra packages needed) ─
 # multiprocessing, random, math  →  Python standard library
 
+# ── Reinforcement learning (PPO agent) ───────────────────────
+torch>=2.0.0
+gymnasium>=0.29.0
+
 # ── Environment / config ─────────────────────────────────────
 python-dotenv>=1.0.0
 
