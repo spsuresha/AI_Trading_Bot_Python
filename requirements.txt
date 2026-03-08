@@ -1,0 +1,31 @@
+# ── Core data / numeric ─────────────────────────────────────
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.11.0
+
+# ── Exchange connectivity ────────────────────────────────────
+ccxt>=4.2.0
+
+# ── Machine learning ─────────────────────────────────────────
+scikit-learn>=1.3.0
+xgboost>=2.0.0
+
+# ── Technical analysis helpers (optional, used by features) ──
+ta>=0.10.2
+
+# ── Dashboard ────────────────────────────────────────────────
+streamlit>=1.32.0
+plotly>=5.18.0
+
+# ── Database ─────────────────────────────────────────────────
+# sqlite3 is part of Python stdlib – no extra package needed
+
+# ── Scheduling ───────────────────────────────────────────────
+schedule>=1.2.0
+
+# ── Environment / config ─────────────────────────────────────
+python-dotenv>=1.0.0
+
+# ── Utilities ────────────────────────────────────────────────
+requests>=2.31.0
+tqdm>=4.66.0
