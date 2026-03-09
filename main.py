@@ -16,7 +16,7 @@ import signal
 import sys
 import time
 from datetime import datetime, timezone
-from typing import Dict
+from typing import Dict, Optional
 
 import pandas as pd
 
@@ -28,6 +28,7 @@ from execution.executor import Order, OrderExecutor
 from portfolio.tracker import PortfolioTracker
 from risk_management.risk_manager import RiskManager, TradeProposal
 from strategies.engine import StrategyEngine, SignalDirection
+from monitoring.telegram_notifier import get_notifier
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -65,13 +66,15 @@ class TradingBot:
     LOOP_INTERVAL_SECONDS: int = 60   # poll every 60 s; real candle boundary detected via timestamp
 
     def __init__(self) -> None:
-        self.updater = DataUpdater()
-        self.storage = DataStorage()
-        self.engine = StrategyEngine()
-        self.risk = RiskManager()
+        self.updater  = DataUpdater()
+        self.storage  = DataStorage()
+        self.engine   = StrategyEngine()
+        self.risk     = RiskManager()
         self.executor = OrderExecutor(storage=self.storage)
         self.portfolio = PortfolioTracker()
+        self.notifier  = get_notifier()
         self._last_candle_ts: Dict[str, str] = {}
+        self._last_summary_hour: Optional[int] = None
         logger.info("TradingBot initialised")
 
     # ------------------------------------------------------------------ #
@@ -87,11 +90,22 @@ class TradingBot:
         logger.info("Timeframe: %s", settings.trading.timeframe)
         logger.info("=" * 60)
 
+        mode = "PAPER" if settings.trading.paper_trading else "LIVE"
+        if settings.telegram.alert_on_trade:
+            self.notifier.alert_bot_start(
+                mode=mode,
+                symbols=settings.trading.symbols,
+                timeframe=settings.trading.timeframe,
+            )
+
         while _RUNNING:
             try:
                 self._tick()
+                self._maybe_send_daily_summary()
             except Exception as exc:
                 logger.error("Unhandled exception in tick: %s", exc, exc_info=True)
+                if settings.telegram.alert_on_error:
+                    self.notifier.alert_error(str(exc), context="main tick loop")
 
             if _RUNNING:
                 logger.debug("Sleeping %ds until next tick …", self.LOOP_INTERVAL_SECONDS)
@@ -138,6 +152,21 @@ class TradingBot:
             current_price = float(df["close"].iloc[-1])
             atr = float(df["atr"].iloc[-1]) if "atr" in df.columns else current_price * 0.01
 
+            direction_name = combined.direction.name  # "BUY" | "SELL"
+
+            # Telegram: signal alert (before risk check)
+            if settings.telegram.alert_on_signal:
+                strat_sigs = {
+                    k: v.direction.name
+                    for k, v in combined.individual_signals.items()
+                }
+                self.notifier.alert_signal(
+                    symbol=sym,
+                    direction=direction_name,
+                    score=combined.combined_score,
+                    strategies=strat_sigs,
+                )
+
             proposal = TradeProposal(
                 symbol=sym,
                 direction=int(combined.direction),
@@ -149,17 +178,20 @@ class TradingBot:
 
             if not decision.approved:
                 logger.info("[%s] Order REJECTED: %s", sym, decision.rejection_reason)
+                if settings.telegram.alert_on_rejection:
+                    self.notifier.alert_order_rejected(sym, decision.rejection_reason)
                 continue
 
             # 5. Execute
             side = "buy" if decision.direction == 1 else "sell"
+            strat_label = str({k: v.direction.name for k, v in combined.individual_signals.items()})
             order = Order(
                 symbol=sym,
                 side=side,
                 quantity=decision.quantity,
                 stop_loss=decision.stop_loss,
                 take_profit=decision.take_profit,
-                strategy=str({k: v.direction.name for k, v in combined.individual_signals.items()}),
+                strategy=strat_label,
             )
             result = self.executor.execute(order, current_price=current_price)
 
@@ -174,6 +206,18 @@ class TradingBot:
                     take_profit=decision.take_profit,
                 )
                 logger.info("Trade opened: %s %s @ %.4f", side.upper(), sym, result.filled_price)
+
+                # Telegram: trade opened
+                if settings.telegram.alert_on_trade:
+                    self.notifier.alert_trade_opened(
+                        symbol=sym,
+                        side=side,
+                        price=result.filled_price,
+                        quantity=result.filled_qty,
+                        stop_loss=decision.stop_loss,
+                        take_profit=decision.take_profit,
+                        strategy=strat_label,
+                    )
 
         # 6. Log portfolio summary
         summary = self.portfolio.get_summary()
@@ -211,11 +255,36 @@ class TradingBot:
                     logger.info("[%s] %s exit: price=%.4f PnL=%.4f",
                                 sym, trigger, exit_price, trade["pnl"])
 
+                    # Telegram: trade closed
+                    if settings.telegram.alert_on_trade:
+                        entry = trade.get("entry_price") or exit_price
+                        pnl_pct = (trade["pnl"] / (entry * trade["quantity"]) * 100) if entry else None
+                        self.notifier.alert_trade_closed(
+                            symbol=sym,
+                            trigger=trigger,
+                            price=exit_price,
+                            pnl=trade["pnl"],
+                            pnl_pct=pnl_pct,
+                        )
+
+    def _maybe_send_daily_summary(self) -> None:
+        """Send a daily summary once per day at the configured UTC hour."""
+        if not settings.telegram.daily_summary:
+            return
+        now_hour = datetime.now(tz=timezone.utc).hour
+        target   = settings.telegram.daily_summary_hour
+        if now_hour == target and self._last_summary_hour != target:
+            self._last_summary_hour = target
+            summary = self.portfolio.get_summary()
+            self.notifier.alert_daily_summary(summary)
+
     def _shutdown(self) -> None:
         logger.info("Shutting down – final portfolio state:")
         summary = self.portfolio.get_summary()
         for k, v in summary.items():
             logger.info("  %-25s: %s", k, v)
+        if settings.telegram.alert_on_trade:
+            self.notifier.alert_bot_stop(summary)
 
 
 # ─────────────────────── CLI entry-points ─────────────────────

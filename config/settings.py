@@ -148,6 +148,21 @@ class BacktestConfig:
     benchmark_symbol: str = "BTC/USDT"
 
 
+# ─────────────────────── telegram alerts ─────────────────────
+@dataclass
+class TelegramConfig:
+    bot_token:          str   = field(default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", ""))
+    chat_id:            str   = field(default_factory=lambda: os.getenv("TELEGRAM_CHAT_ID",   ""))
+    enabled:            bool  = True      # master switch (auto-disabled when token/chat_id empty)
+    alert_on_signal:    bool  = True      # send alert for every BUY/SELL signal
+    alert_on_trade:     bool  = True      # send alert on trade open/close
+    alert_on_rejection: bool  = False     # send alert on risk-manager rejections
+    alert_on_error:     bool  = True      # send alert on unhandled errors
+    daily_summary:      bool  = True      # send daily P&L summary
+    daily_summary_hour: int   = 23        # UTC hour for daily summary (0-23)
+    request_timeout:    int   = 5         # seconds
+
+
 # ─────────────────────── logging ─────────────────────────────
 @dataclass
 class LogConfig:
@@ -169,6 +184,7 @@ class Settings:
     strategy: StrategyConfig = field(default_factory=StrategyConfig)
     rl: RLConfig = field(default_factory=RLConfig)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
+    telegram: TelegramConfig = field(default_factory=TelegramConfig)
     logging: LogConfig = field(default_factory=LogConfig)
 
     # convenience paths
